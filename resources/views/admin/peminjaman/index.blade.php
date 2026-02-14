@@ -28,6 +28,11 @@
                             <i class="bi bi-box-arrow-right"></i> Sedang Pinjam
                         </a>
 
+                        <a href="{{ route('admin.peminjaman.index', ['status' => 'pending_return']) }}"
+                            class="btn btn-sm {{ request('status') == 'pending_return' ? 'btn-info text-white' : 'btn-outline-info text-dark' }}">
+                            <i class="bi bi-clock-history"></i> Menunggu Konfirmasi
+                        </a>
+
                         {{-- Tombol Dikembalikan --}}
                         <a href="{{ route('admin.peminjaman.index', ['status' => 'returned']) }}"
                             class="btn btn-sm {{ request('status') == 'returned' ? 'btn-success' : 'btn-outline-success' }}">
@@ -47,7 +52,10 @@
                                     <th>No</th>
                                     <th>Peminjam</th>
                                     <th>Alat</th>
+                                    <th>Jumlah</th>
+                                    <th>Keterangan</th>
                                     <th>Tanggal Pinjam</th>
+                                    <th>Deadline</th>
                                     <th>Tanggal Kembali</th>
                                     <th>Status</th>
                                     <th class="text-center">Aksi</th>
@@ -66,13 +74,41 @@
                                                 <span class="fw-medium">{{ $peminjaman->user->name }}</span>
                                             </div>
                                         </td>
-                                        <td>{{ $peminjaman->alat->nama_alat }}</td>
-                                        <td>{{ \Carbon\Carbon::parse($peminjaman->tgl_pinjam)->format('d M Y') }}</td>
                                         <td>
-                                            @if ($peminjaman->tgl_kembali)
-                                                {{ \Carbon\Carbon::parse($peminjaman->tgl_kembali)->format('d M Y') }}
+                                            <div class="d-flex align-items-center gap-2">
+                                                @if ($peminjaman->alat->foto)
+                                                    <img src="{{ asset('storage/' . $peminjaman->alat->foto) }}"
+                                                        class="rounded"
+                                                        style="width: 40px; height: 40px; object-fit: cover;">
+                                                @else
+                                                    <div class="bg-light rounded d-flex align-items-center justify-content-center"
+                                                        Style="width: 40px; height: 40px;">
+                                                        <i class="bi bi-image text-muted"></i>
+                                                    </div>
+                                                @endif
+                                                <span class="fw-medium">{{ $peminjaman->alat->nama }}</span>
+                                            </div>
+                                        </td>
+                                        <td>{{ $peminjaman->jumlah }}</td>
+                                        <td>
+                                            <div class="small fw-bold">{{ $peminjaman->keterangan }}</div>
+                                        </td>
+                                        <td>{{ $peminjaman->tgl_pinjam->format('d M Y') }}</td>
+                                        <td>
+                                            @if ($peminjaman->tgl_kembali_admin)
+                                                {{ $peminjaman->tgl_kembali_admin->format('d M Y') }}
                                             @else
-                                                <span class="text-muted">-</span>
+                                                -
+                                            @endif
+                                        </td>
+                                        <td>
+                                            @if ($peminjaman->tgl_pengembalian_user)
+                                                {{ $peminjaman->tgl_pengembalian_user->format('d M Y') }}
+                                                @if ($peminjaman->tgl_pengembalian_user > $peminjaman->tgl_kembali_admin)
+                                                    <br><span class="badge bg-warning">Telat</span>
+                                                @endif
+                                            @else
+                                                -
                                             @endif
                                         </td>
                                         <td>
@@ -80,10 +116,12 @@
                                                 <span class="badge bg-warning text-dark">Menunggu</span>
                                             @elseif($peminjaman->status == 'approved')
                                                 <span class="badge bg-primary">Sedang Pinjam</span>
-                                            @elseif($peminjaman->status == 'rejected')
-                                                <span class="badge bg-danger">Ditolak</span>
+                                            @elseif($peminjaman->status == 'pending_return')
+                                                <span class="badge bg-info text-dark">Menunggu Konfirmasi</span>
                                             @elseif($peminjaman->status == 'returned')
                                                 <span class="badge bg-success">Dikembalikan</span>
+                                            @elseif($peminjaman->status == 'rejected')
+                                                <span class="badge bg-danger">Ditolak</span>
                                             @endif
                                         </td>
                                         <td class="text-center">
@@ -93,14 +131,11 @@
 
                                                 {{-- 1. Jika Pending: Tampilkan Tombol Approve & Reject --}}
                                                 @if ($peminjaman->status == 'pending')
-                                                    <form action="{{ route('admin.peminjaman.approve', $peminjaman->id) }}"
-                                                        method="POST">
-                                                        @csrf @method('PATCH')
-                                                        <button type="submit" class="btn btn-sm btn-success"
-                                                            onclick="return confirm('Setujui peminjaman ini?')">
-                                                            <i class="bi bi-check-lg"></i>
-                                                        </button>
-                                                    </form>
+                                                    <button type="button" class="btn btn-sm btn-success"
+                                                        data-bs-toggle="modal"
+                                                        data-bs-target="#approveModal{{ $peminjaman->id }}">
+                                                        <i class="bi bi-check-lg"></i>
+                                                    </button>
 
                                                     <form action="{{ route('admin.peminjaman.reject', $peminjaman->id) }}"
                                                         method="POST">
@@ -111,22 +146,81 @@
                                                         </button>
                                                     </form>
 
-                                                    {{-- 2. Jika Approved: Tampilkan Tombol Kembalikan --}}
-                                                @elseif($peminjaman->status == 'approved')
-                                                    <form action="{{ route('admin.peminjaman.return', $peminjaman->id) }}"
+
+                                                    {{-- Modal untuk pilih durasi --}}
+                                                    <div class="modal fade" id="approveModal{{ $peminjaman->id }}"
+                                                        tabindex="-1">
+                                                        <div class="modal-dialog">
+                                                            <div class="modal-content">
+                                                                <div class="modal-header">
+                                                                    <h5 class="modal-title">Setujui Peminjaman</h5>
+                                                                    <button type="button" class="btn-close"
+                                                                        data-bs-dismiss="modal"></button>
+                                                                </div>
+                                                                <form
+                                                                    action="{{ route('admin.peminjaman.approve', $peminjaman->id) }}"
+                                                                    method="POST">
+                                                                    @csrf @method('PATCH')
+                                                                    <div class="modal-body">
+                                                                        <p>Setujui peminjaman
+                                                                            <strong>{{ $peminjaman->alat->nama }}</strong>
+                                                                            oleh
+                                                                            <strong>{{ $peminjaman->user->name }}</strong>?
+                                                                        </p>
+
+                                                                        <div class="mb-3">
+                                                                            <label class="form-label">Durasi
+                                                                                Peminjaman</label>
+                                                                            <select name="durasi_hari" class="form-select"
+                                                                                required>
+                                                                                <option value="">Pilih durasi...
+                                                                                </option>
+                                                                                <option value="1">1 Hari</option>
+                                                                                <option value="3" selected>3 Hari
+                                                                                </option>
+                                                                                <option value="7">1 Minggu (7 Hari)
+                                                                                </option>
+                                                                                <option value="14">2 Minggu (14 Hari)
+                                                                                </option>
+                                                                                <option value="30">1 Bulan (30 Hari) -
+                                                                                    Maksimal</option>
+                                                                            </select>
+                                                                            <small class="text-muted">Atau tentukan tanggal
+                                                                                langsung:</small>
+                                                                            <input type="date" name="tgl_kembali_custom"
+                                                                                class="form-control mt-2"
+                                                                                min="{{ date('Y-m-d', strtotime('+1 day')) }}">
+                                                                        </div>
+                                                                    </div>
+                                                                    <div class="modal-footer">
+                                                                        <button type="button" class="btn btn-secondary"
+                                                                            data-bs-dismiss="modal">Batal</button>
+                                                                        <button type="submit"
+                                                                            class="btn btn-primary">Setujui</button>
+                                                                    </div>
+                                                                </form>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                @elseif($peminjaman->status == 'pending_return')
+                                                    <form
+                                                        action="{{ route('admin.peminjaman.confirm-return', $peminjaman->id) }}"
                                                         method="POST">
                                                         @csrf @method('PATCH')
-                                                        <button type="submit" class="btn btn-sm btn-info text-white"
-                                                            onclick="return confirm('Konfirmasi pengembalian alat?')">
-                                                            <i class="bi bi-box-arrow-in-down"></i> Kembalikan
+                                                        <button type="submit" class="btn btn-sm btn-success"
+                                                            onclick="return confirm('Konfirmasi penerimaan alat ini?')">
+                                                            <i class="bi bi-check-circle"></i> Terima
                                                         </button>
                                                     </form>
 
-                                                    {{-- 3. Jika Selesai/Ditolak: Tidak ada aksi --}}
-                                                @else
-                                                    <button class="btn btn-sm btn-secondary" disabled>Selesai</button>
-                                                @endif
+                                                    {{-- APPROVED: Tidak ada aksi (menunggu user ajukan kembali) --}}
+                                                @elseif($peminjaman->status == 'approved')
+                                                    <span class="text-muted">-</span>
 
+                                                    {{-- SELESAI/DITOLAK --}}
+                                                @else
+                                                    <span class="text-muted">-</span>
+                                                @endif
                                             </div>
                                         </td>
                                     </tr>

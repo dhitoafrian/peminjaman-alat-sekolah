@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Http\Controllers\Controller;
 use App\Models\Peminjaman;
 use Illuminate\Http\Request;
-use App\Http\Controllers\Controller;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class AdminPeminjamanController extends Controller
 {
@@ -26,25 +28,42 @@ class AdminPeminjamanController extends Controller
     }
 
     // B. Approve peminjaman
-    public function approve($id)
+    public function approve(Request $request, $id)
     {
+        // Validasi dulu
+        $validated = $request->validate([
+            'durasi_hari' => 'nullable|integer|min:1|max:30',
+            'tgl_kembali_custom' => 'nullable|date|after:today',
+        ]);
+
+        if (!$request->filled('durasi_hari') && !$request->filled('tgl_kembali_custom')) {
+            return back()->with('error', 'Pilih durasi atau isi tanggal kembali!');
+        }
+
         $peminjaman = Peminjaman::findOrFail($id);
+
+        if ($request->filled('tgl_kembali_custom')) {
+            $tglKembali = $request->tgl_kembali_custom;
+        } else {
+            // ⭐ PAKSA JADI INTEGER!
+            $durasi = intval($request->durasi_hari);
+            $tglKembali = now()->addDays($durasi)->format('Y-m-d');
+        }
+
         $alat = $peminjaman->alat;
 
-        // Cek stok
-        if ($alat->stok > 0) {
-            // Kurangi stok
-            $alat->decrement('stok');
+        if ($alat->stok >= $peminjaman->jumlah) {
+            $alat->decrement('stok', $peminjaman->jumlah);
 
-            // Update status peminjaman
             $peminjaman->update([
-                'status' => 'approved'
+                'status' => 'approved',
+                'tgl_kembali_admin' => $tglKembali,
             ]);
 
-            return redirect()->back()->with('success', 'Peminjaman berhasil disetujui.');
-        } else {
-            return redirect()->back()->with('error', 'Stok alat habis, tidak dapat menyetujui peminjaman.');
+            return back()->with('success', 'Peminjaman berhasil disetujui.');
         }
+
+        return back()->with('error', 'Stok tidak cukup.');
     }
 
     // C. Reject peminjaman
@@ -61,25 +80,22 @@ class AdminPeminjamanController extends Controller
     }
 
     // Tambahan: Kembalikan alat (menambah stok kembali)
-    public function return($id)
+    public function confirmReturn($id)
     {
         $peminjaman = Peminjaman::findOrFail($id);
 
-        if ($peminjaman->status === 'approved') {
-            $alat = $peminjaman->alat;
-
-            // Tambah stok kembali
-            $alat->increment('stok');
-
-            // Update peminjaman
-            $peminjaman->update([
-                'status' => 'returned',
-                'tgl_kembali' => now()
-            ]);
-
-            return redirect()->back()->with('success', 'Alat berhasil dikembalikan.');
+        if ($peminjaman->status !== 'pending_return') {
+            return redirect()->back()->with('error', 'tidak ada pengajuan pengembalian');
         }
 
-        return redirect()->back()->with('error', 'Peminjaman tidak dalam status approved.');
+        $peminjaman->alat->increment('stok', $peminjaman->jumlah);
+
+        // Update peminjaman
+        $peminjaman->update([
+            'status' => 'returned',
+            'tgl_pengembalian_user' => $peminjaman->tgl_pengembalian_user ?? now(),
+        ]);
+
+        return redirect()->back()->with('success', 'Alat berhasil dikembalikan.');
     }
 }

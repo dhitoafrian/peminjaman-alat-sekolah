@@ -38,7 +38,7 @@ class PeminjamanController extends Controller
         $request->validate([
             'alat_id' => 'required|exists:alats,id',
             'jumlah' => 'required|integer|min:1',
-            'keterangan' => 'nullable|string'
+            'keterangan' => 'required|string|max:255',
         ]);
 
         // Cek stok sekali lagi
@@ -53,6 +53,7 @@ class PeminjamanController extends Controller
             'user_id' => auth()->id(),
             'alat_id' => $request->alat_id,
             'jumlah' => $request->jumlah,
+            'keterangan' => $request->keterangan,
             'tgl_pinjam' => now(),
             'status' => 'pending',
             'keterangan' => $request->keterangan
@@ -60,5 +61,17 @@ class PeminjamanController extends Controller
 
         return redirect()->route('peminjaman.index')
             ->with('success', 'Pengajuan peminjaman berhasil diajukan. Menunggu persetujuan admin.');
+    }
+
+    public function requestReturn($id)
+    {
+        $peminjaman = Peminjaman::where('user_id', auth()->id())->where('status', 'approved')->findOrFail($id);
+
+        $peminjaman->update([
+            'status' => 'pending_return',
+            'tgl_pengembalian_user' => now()->format('Y-m-d'),
+        ]);
+
+        return back()->with('success', 'Pengembalian diajukan, menunggu konfirmasi admin');
     }
 }

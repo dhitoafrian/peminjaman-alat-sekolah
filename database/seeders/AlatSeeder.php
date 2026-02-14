@@ -30,7 +30,7 @@ class AlatSeeder extends Seeder
             ],
             [
                 'nama' => 'Tripod Kamera',
-                'foto' => 'alat/tripod.jpg',
+                'foto' => 'alat/tripot-kamera.jpg',
                 'stok' => 6,
                 'deskripsi' => 'Tripod untuk kamera dan smartphone'
             ],
