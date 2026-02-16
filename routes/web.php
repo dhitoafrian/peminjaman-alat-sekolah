@@ -8,13 +8,7 @@
 
     // Redirect root berdasarkan auth status
     Route::get('/', function () {
-        if (auth()->check()) {
-            // jika kolom ada role
-            return auth()->user()->role === 'admin'
-                ? redirect()->route('dashboard')
-                : redirect()->route('dashboard');
-        }
-        return redirect()->route('login');
+        return auth()->check() ? redirect()->route('dashboard') : redirect()->route('login');
     });
 
     Route::middleware('auth')->group(function () {
@@ -33,21 +27,16 @@
                 Route::get('/', [AdminPeminjamanController::class, 'index'])->name('index');
                 Route::patch('/{peminjaman}/approve', [AdminPeminjamanController::class, 'approve'])->name('approve');
                 Route::patch('/{peminjaman}/reject', [AdminPeminjamanController::class, 'reject'])->name('reject');
+                Route::patch('/{peminjaman}/confrim-return', [AdminPeminjamanController::class, 'confrimReturn'])->name('confirm-return');
             });
         });
 
         // Routes untuk USER biasa
-        Route::middleware('auth')->group(function () {
-            // Pinjam alat (dari katalog)
-            Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
-
-            // Khusus User
-            Route::middleware(['role:user'])->group(function () {
-                Route::get('/peminjaman/create/{alat}', [PeminjamanController::class, 'create'])->name('peminjaman.create');
-                Route::post('/peminjaman', [PeminjamanController::class, 'store'])->name('peminjaman.store');
-                Route::patch('/peminjaman/{id}/request-return', [PeminjamanController::class, 'requestReturn'])->name('peminjaman.request-return');
-                Route::get('/riwayat-peminjaman', [PeminjamanController::class, 'index'])->name('peminjaman.index');
-            });
+        Route::middleware(['role:user'])->group(function () {
+            Route::get('/peminjaman/create/{alat}', [PeminjamanController::class, 'create'])->name('peminjaman.create');
+            Route::post('/peminjaman', [PeminjamanController::class, 'store'])->name('peminjaman.store');
+            Route::patch('/peminjaman/{id}/request-return', [PeminjamanController::class, 'requestReturn'])->name('peminjaman.request-return');
+            Route::get('/riwayat-peminjaman', [PeminjamanController::class, 'index'])->name('peminjaman.index');
         });
     });
 

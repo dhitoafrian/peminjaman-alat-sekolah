@@ -3,13 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\Alat;
-use App\Models\User;
 use App\Models\Peminjaman;
+use App\Models\User;
 use Illuminate\Http\Request;
 
 class DashboardController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
         // Cek role user
         $user = auth()->user();
@@ -40,7 +40,15 @@ class DashboardController extends Controller
             ));
         } else {
             // Dashboard User: Katalog alat
-            $alats = Alat::all();
+            $query = Alat::query();
+
+            if ($request->filled('search')) {
+                $search = $request->search;
+                $query->where('nama', 'like', '%' . $search . '%')
+                    ->orWhere('deskripsi', 'like', '%' . $search . '%');
+            }
+
+            $alats = $query->get();
 
             return view('dashboard.user', compact('alats'));
         }
